@@ -32,7 +32,7 @@ export const getDashboardData = async (req, res) => {
       const key = `${year}-${month}`;
 
       // Convert string to actual number safely
-      const amountPaid = Number(payment.paidAmount || 0);
+      const amountPaid = Number(payment.paidAmount);
 
       // Add to month total
       if (!monthlyData[key]) monthlyData[key] = 0;
