@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { QrCode, CheckCircle2, Clock } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { getTodayAttendance, markAttendance } from '../../api/attendanceApi';
+import { getTodayAttendance, markAttendance } from '../../api/AttendanceApi';
 
 const Attendance = () => {
   const [records, setRecords] = useState([]);
