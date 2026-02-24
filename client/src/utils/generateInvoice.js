@@ -37,7 +37,7 @@ export const generateInvoice = (payment) => {
 
   // FIXED: Call autoTable directly and pass 'doc' into it
   const tableData = [
-    ['Gym Membership / Service Fee', payment.method, `Rs. ${payment.amount}`]
+    ['Gym Membership / Service Fee', payment.method, `Rs. ${payment.paidAmount}`]
   ];
 
   autoTable(doc, {
