@@ -1,67 +1,64 @@
 import Member from '../models/Member.js';
 import Payment from '../models/Payment.js';
-import Trainer from '../models/Trainer.js'; // Uncomment when Trainer model is ready
+import Trainer from '../models/Trainer.js';
 
-// @desc    Get aggregate data for the Admin Dashboard
-// @route   GET /api/dashboard
-// @access  Private (Admin)
 export const getDashboardData = async (req, res) => {
   try {
-    // Support configurable months window via query ?months=3|6|12 (default 6)
     const months = parseInt(req.query.months, 10) || 6;
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth() - (months - 1), 1);
     startOfMonth.setHours(0, 0, 0, 0);
 
-    // 1. Get Total and Active Members
+    // 1. Get Totals
     const totalMembers = await Member.countDocuments();
     const activeMembers = await Member.countDocuments({ status: 'Active' });
+    const totalTrainers = await Trainer.countDocuments({ isActive: true });
 
-    // 2. Get Total Trainers (Commented out until Trainer model is built)
-    // const totalTrainers = await Trainer.countDocuments({ isActive: true });
-    // Change this: const totalTrainers = 0; 
-// To this:
-const totalTrainers = await Trainer.countDocuments({ isActive: true });
+    // 📈 2. FETCH ALL RECENT PAYMENTS (No MongoDB Aggregation Trap!)
+    const recentPayments = await Payment.find({
+      createdAt: { $gte: startOfMonth }
+    });
 
-    // 3. Calculate this month's revenue
-    const revenueData = await Payment.aggregate([
-      {
-        $match: {
-          status: 'Completed',
-          createdAt: { $gte: startOfMonth }
-        }
-      },
-      {
-        $group: {
-          _id: { year: { $year: '$createdAt' }, month: { $month: '$createdAt' } },
-          monthlyRevenue: { $sum: '$amount' }
-        }
+    // 💰 3. BULLETPROOF CALCULATION IN JAVASCRIPT
+    const monthlyData = {};
+    let currentMonthRevenue = 0;
+    const currentMonthNum = new Date().getMonth() + 1;
+    const currentYearNum = new Date().getFullYear();
+
+    recentPayments.forEach(payment => {
+      const date = new Date(payment.createdAt);
+      const year = date.getFullYear();
+      const month = date.getMonth() + 1;
+      const key = `${year}-${month}`;
+
+      // Convert string to actual number safely
+      const amountPaid = Number(payment.paidAmount || 0);
+
+      // Add to month total
+      if (!monthlyData[key]) monthlyData[key] = 0;
+      monthlyData[key] += amountPaid;
+
+      // Check if it's the current month
+      if (year === currentYearNum && month === currentMonthNum) {
+        currentMonthRevenue += amountPaid;
       }
-    ]);
+    });
 
-    const currentMonthRevenue = revenueData.length > 0 ? revenueData.reduce((acc, cur) => acc + cur.monthlyRevenue, 0) : 0;
-
-    // Build a months-long series (including current month)
-    const monthsToShow = months;
+    // 📊 4. FORMAT DATA FOR RECHARTS
     const chartData = [];
     const current = new Date();
-    for (let i = monthsToShow - 1; i >= 0; i--) {
+    for (let i = months - 1; i >= 0; i--) {
       const d = new Date(current.getFullYear(), current.getMonth() - i, 1);
-      const year = d.getFullYear();
-      const month = d.getMonth() + 1; // Mongo month (1-12)
+      const key = `${d.getFullYear()}-${d.getMonth() + 1}`;
       const monthName = d.toLocaleString('default', { month: 'short' });
 
-      const found = revenueData.find(r => r._id.year === year && r._id.month === month);
-      chartData.push({ name: monthName, revenue: found ? found.monthlyRevenue : 0 });
+      chartData.push({ 
+        name: monthName, 
+        revenue: monthlyData[key] || 0 
+      });
     }
 
-    // 4. Find Recent Pending Dues
-    // Assuming 'Pending Payment' is a status in your Member model
-    const pendingDues = await Member.find({ status: 'Pending Payment' })
-      .select('name phone')
-      .limit(5);
-
-    // Send everything back in one clean object
+    // Send data back to React
     res.status(200).json({
       success: true,
       data: {
@@ -69,7 +66,6 @@ const totalTrainers = await Trainer.countDocuments({ isActive: true });
         activeMembers,
         totalTrainers,
         currentMonthRevenue,
-        pendingDues,
         chartData
       }
     });

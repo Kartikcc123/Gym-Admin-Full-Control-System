@@ -53,7 +53,7 @@ export const generateInvoice = (payment) => {
   const finalY = doc.lastAutoTable.finalY || 75;
   doc.setFontSize(12);
   doc.setTextColor(0, 0, 0);
-  doc.text(`Total Paid: Rs. ${payment.amount}`, 14, finalY + 15);
+  doc.text(`Total Paid: Rs. ${payment.paidAmount}`, 14, finalY + 15);
 
   doc.setFontSize(10);
   doc.setTextColor(150, 150, 150);

@@ -6,7 +6,7 @@ import { getPendingPayments } from '../../api/paymentApi';
 import toast from 'react-hot-toast';
 import { generateMonthlyReport } from '../../utils/generateMonthlyReport';
 
-// Fallback chart data in case the server doesn't provide it
+// Fallback chart data in case the server is empty
 const mockChartData = [
   { name: 'Jan', revenue: 0 },
   { name: 'Feb', revenue: 0 },
@@ -21,8 +21,10 @@ const Dashboard = () => {
     totalMembers: 0,
     activeMembers: 0,
     totalTrainers: 0,
-    currentMonthRevenue: 0
+    currentMonthRevenue: 0,
+    chartData: [] // Default empty array for graph
   });
+  
   const [pendingDues, setPendingDues] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -31,15 +33,29 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchStats = async () => {
       try {
+        setLoading(true);
+        // 1. Fetch main dashboard stats
         const result = await getDashboardStats(monthsRange);
-        setStats(result.data);
-        // fetch pending dues separately
+        
+        // 🔥 THE FIX: Properly extract data whether it's wrapped in .data or not
+        const actualData = result.data ? result.data : result;
+        setStats({
+          totalMembers: actualData.totalMembers || 0,
+          activeMembers: actualData.activeMembers || 0,
+          totalTrainers: actualData.totalTrainers || 0,
+          currentMonthRevenue: actualData.currentMonthRevenue || 0,
+          chartData: actualData.chartData || []
+        });
+
+        // 2. Fetch pending dues separately
         try {
           const pending = await getPendingPayments();
-          setPendingDues(pending.data || pending);
+          const actualPendingData = pending.data ? pending.data : pending;
+          setPendingDues(actualPendingData || []);
         } catch (pErr) {
           console.error('Failed to load pending dues', pErr);
         }
+
       } catch (error) {
         toast.error('Failed to load dashboard data', { style: { background: '#333', color: '#fff' }});
       } finally {
@@ -64,42 +80,55 @@ const Dashboard = () => {
     setIsGenerating(false);
   };
 
-  if (loading) {
-    return <div className="text-gray-500 font-bold uppercase tracking-widest animate-pulse">Loading Command Center...</div>;
-  }
-
+  // 🔥 BULLETPROOF CURRENCY FORMATTER
   const formatCurrency = (amount) => {
+    const safeAmount = Number(amount) || 0;
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
       maximumFractionDigits: 0
-    }).format(amount);
+    }).format(safeAmount);
   };
+
+  if (loading) {
+    return <div className="text-gray-500 p-10 font-bold text-center uppercase tracking-widest animate-pulse">Loading Command Center...</div>;
+  }
+
+  // Determine which data to show on the chart
+  const chartDataToShow = stats.chartData && stats.chartData.length > 0 ? stats.chartData : mockChartData;
 
   return (
     <div className="space-y-8">
-      {/* FIXED: Removed the duplicate header block */}
+      {/* Header & Controls */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black uppercase tracking-widest text-white mb-1">Overview</h1>
-          <p className="text-gray-500 font-medium tracking-wide">Real-time metrics for NextGenz Gym</p>
+          <p className="text-gray-500 font-medium tracking-wide">Real-time metrics for NextGenz ERP</p>
         </div>
+        
+        <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-3">
-            <label className="text-xs text-gray-400 font-bold uppercase">Range</label>
-            <select value={monthsRange} onChange={(e) => setMonthsRange(Number(e.target.value))} className="bg-black border border-gray-900 rounded p-2 text-sm">
-              <option value={3}>3 months</option>
-              <option value={6}>6 months</option>
-              <option value={12}>12 months</option>
+            <label className="text-xs text-gray-400 font-bold uppercase tracking-wider">Range</label>
+            <select 
+              value={monthsRange} 
+              onChange={(e) => setMonthsRange(Number(e.target.value))} 
+              className="bg-black border border-gray-900 focus:border-red-600 outline-none rounded-lg p-2.5 text-sm text-white transition-colors"
+            >
+              <option value={3}>Last 3 months</option>
+              <option value={6}>Last 6 months</option>
+              <option value={12}>Last 12 months</option>
             </select>
           </div>
-        <button 
-          onClick={handleDownloadReport}
-          disabled={isGenerating}
-          className="flex items-center justify-center bg-gray-900 hover:bg-gray-800 border border-gray-800 text-white px-5 py-2.5 rounded-lg font-bold uppercase tracking-wider transition-colors disabled:opacity-50 text-sm shadow-[0_0_15px_rgba(220,38,38,0.15)]"
-        >
-          <Download className="w-4 h-4 mr-2 text-red-500" />
-          {isGenerating ? 'Compiling...' : 'Download Report'}
-        </button>
+          
+          <button 
+            onClick={handleDownloadReport}
+            disabled={isGenerating}
+            className="flex items-center justify-center bg-gray-900 hover:bg-gray-800 border border-gray-800 text-white px-5 py-2.5 rounded-lg font-bold uppercase tracking-wider transition-colors disabled:opacity-50 text-sm shadow-[0_0_15px_rgba(220,38,38,0.15)]"
+          >
+            <Download className="w-4 h-4 mr-2 text-red-500" />
+            {isGenerating ? 'Compiling...' : 'Download Report'}
+          </button>
+        </div>
       </div>
 
       {/* Top Stat Cards */}
@@ -114,11 +143,11 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
         {/* Revenue Chart Section */}
-        <div className="lg:col-span-2 bg-black border border-gray-900 rounded-xl p-6">
+        <div className="lg:col-span-2 bg-black border border-gray-900 rounded-xl p-6 shadow-lg">
           <h2 className="text-lg font-bold uppercase tracking-widest text-white mb-6">Revenue Growth</h2>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={stats.chartData && stats.chartData.length ? stats.chartData : mockChartData}>
+              <AreaChart data={chartDataToShow}>
                 <defs>
                   <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#dc2626" stopOpacity={0.3}/>
@@ -129,7 +158,7 @@ const Dashboard = () => {
                 <XAxis dataKey="name" stroke="#6b7280" tick={{fill: '#6b7280'}} tickLine={false} axisLine={false} />
                 <YAxis stroke="#6b7280" tick={{fill: '#6b7280'}} tickLine={false} axisLine={false} tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}k`} />
                 <Tooltip 
-                  contentStyle={{ backgroundColor: '#0a0a0a', borderColor: '#1f2937', color: '#fff' }}
+                  contentStyle={{ backgroundColor: '#0a0a0a', borderColor: '#1f2937', color: '#fff', borderRadius: '8px' }}
                   itemStyle={{ color: '#dc2626', fontWeight: 'bold' }}
                 />
                 <Area type="monotone" dataKey="revenue" stroke="#dc2626" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
@@ -139,25 +168,31 @@ const Dashboard = () => {
         </div>
 
         {/* Pending Dues Section */}
-        <div className="bg-black border border-gray-900 rounded-xl p-6">
+        <div className="bg-black border border-gray-900 rounded-xl p-6 shadow-lg">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-lg font-bold uppercase tracking-widest text-white">Pending Dues</h2>
             <AlertCircle className="text-red-600 w-5 h-5" />
           </div>
           
-          <div className="space-y-4">
+          <div className="space-y-4 max-h-72 overflow-y-auto pr-2 custom-scrollbar">
             {pendingDues.length === 0 ? (
-              <p className="text-gray-500 text-sm">No pending payments.</p>
+              <div className="text-center py-8">
+                <p className="text-green-500 font-bold text-sm uppercase tracking-wider">All Clear! 🎉</p>
+                <p className="text-gray-500 text-xs mt-1">No pending payments.</p>
+              </div>
             ) : (
-              pendingDues.map((item) => (
-                <div key={item.memberId} className="flex justify-between items-center p-3 bg-[#0a0a0a] rounded-lg border border-gray-900">
+              pendingDues.map((item, index) => (
+                <div key={item._id || index} className="flex justify-between items-center p-3 bg-[#0a0a0a] hover:bg-[#111] transition-colors rounded-lg border border-gray-900">
                   <div>
                     <p className="text-white font-bold">{item.member?.name || 'Unnamed'}</p>
-                    <p className="text-xs text-gray-500">{item.member?.phone || item.member?.email || ''}</p>
+                    <p className="text-xs text-gray-500">{item.member?.phone || item.member?.email || 'N/A'}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm text-red-500 font-bold">{formatCurrency(item.totalPending)}</p>
-                    <p className="text-xs text-gray-400">Outstanding</p>
+                    {/* 🔥 THE FIX: Safely grab the due amount from whatever field backend sends */}
+                    <p className="text-sm text-red-500 font-black">
+                      {formatCurrency(item.totalPending || item.remainingAmount || item.amount || 0)}
+                    </p>
+                    <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-0.5">Due</p>
                   </div>
                 </div>
               ))
@@ -172,12 +207,12 @@ const Dashboard = () => {
 
 // Reusable Stat Card Component
 const StatCard = ({ icon: Icon, title, value, color }) => (
-  <div className="bg-black border border-gray-900 p-6 rounded-xl flex items-center justify-between transition-transform hover:-translate-y-1 duration-300">
+  <div className="bg-black border border-gray-900 p-6 rounded-xl flex items-center justify-between transition-transform hover:-translate-y-1 duration-300 shadow-lg">
     <div>
-      <p className="text-gray-500 text-sm font-bold uppercase tracking-widest mb-1">{title}</p>
-      <h3 className={`text-3xl font-black ${color}`}>{value}</h3>
+      <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-1.5">{title}</p>
+      <h3 className={`text-3xl font-black tracking-tight ${color}`}>{value}</h3>
     </div>
-    <div className="bg-gray-900 p-3 rounded-lg">
+    <div className="bg-gray-900 p-3 rounded-xl border border-gray-800">
       <Icon className={`w-6 h-6 ${color}`} />
     </div>
   </div>
