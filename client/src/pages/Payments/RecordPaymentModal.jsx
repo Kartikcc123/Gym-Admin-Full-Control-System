@@ -83,8 +83,9 @@ const RecordPaymentModal = ({
     }
 
     try {
+      // FIX 1: Convert string to Number before sending to Razorpay
       const orderData = await createRazorpayOrder({
-        amount: formData.paidAmount,
+        amount: Number(formData.paidAmount), 
         memberId: formData.memberId
       });
 
@@ -99,12 +100,13 @@ const RecordPaymentModal = ({
 
         handler: async function (response) {
           try {
+            // FIX 2: Convert strings to Numbers before saving to Database
             await verifyRazorpayPayment({
               razorpay_payment_id: response.razorpay_payment_id,
               razorpay_order_id: response.razorpay_order_id,
               razorpay_signature: response.razorpay_signature,
-              totalAmount: formData.totalAmount,
-              paidAmount: formData.paidAmount
+              totalAmount: Number(formData.totalAmount),
+              paidAmount: Number(formData.paidAmount)
             });
 
             toast.success('Payment verified & recorded!');
