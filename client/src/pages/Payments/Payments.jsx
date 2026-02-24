@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
-import { IndianRupee, Search, Plus, Download } from 'lucide-react'; // FIXED: Added Download icon
+import { Search, Plus, Download } from 'lucide-react'; 
 import toast from 'react-hot-toast';
 import { getAllPayments } from '../../api/paymentApi';
 import RecordPaymentModal from './RecordPaymentModal';
-// FIXED: Adjusted path to stay within the React 'src' folder
 import { generateInvoice } from '../../utils/generateInvoice';
 
 const Payments = () => {
@@ -12,22 +11,30 @@ const Payments = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // Moved fetch logic outside useEffect so it can be reused
+  const fetchPayments = async () => {
+    try {
+      const data = await getAllPayments();
+      setPayments(data);
+    } catch (error) {
+      toast.error('Failed to load financial records');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchPayments = async () => {
-      try {
-        const data = await getAllPayments();
-        setPayments(data);
-      } catch (error) {
-        toast.error('Failed to load financial records');
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchPayments();
   }, []);
 
+  // BULLETPROOF CURRENCY FORMATTER (No more NaN!)
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount);
+    const safeAmount = Number(amount) || 0;
+    return new Intl.NumberFormat('en-IN', { 
+      style: 'currency', 
+      currency: 'INR', 
+      maximumFractionDigits: 0 
+    }).format(safeAmount);
   };
 
   const filteredPayments = payments.filter(p => 
@@ -82,7 +89,6 @@ const Payments = () => {
             <tbody className="divide-y divide-gray-900">
               {loading ? (
                 <tr>
-                  {/* FIXED: Increased colSpan to 6 to match new column */}
                   <td colSpan="6" className="p-8 text-center text-gray-500 uppercase tracking-widest animate-pulse font-bold">Loading Ledger...</td>
                 </tr>
               ) : filteredPayments.length === 0 ? (
@@ -92,18 +98,36 @@ const Payments = () => {
               ) : (
                 filteredPayments.map((payment) => (
                   <tr key={payment._id} className="hover:bg-[#050505] transition-colors">
-                    <td className="p-5 text-gray-500 text-xs font-mono uppercase tracking-wider">{payment._id.slice(-8)}</td>
-                    <td className="p-5 font-bold text-white">{payment.member?.name || 'Unknown User'}</td>
-                    <td className="p-5 font-black text-green-500">{formatCurrency(payment.amount)}</td>
+                    <td className="p-5 text-gray-500 text-xs font-mono uppercase tracking-wider">
+                      {payment._id.slice(-8)}
+                    </td>
+                    
+                    <td className="p-5 font-bold text-white">
+                      {payment.member?.name || 'Unknown User'}
+                    </td>
+                    
+                    {/* PROFESSIONAL AMOUNT DISPLAY */}
+                    <td className="p-5">
+                      <div className="font-black text-green-500 text-lg">
+                        {formatCurrency(payment.paidAmount || payment.totalAmount)} 
+                        <span className="text-xs text-gray-500 font-bold ml-1 uppercase tracking-wider">Paid</span>
+                      </div>
+                      <div className="text-xs text-gray-400 font-medium mt-1">
+                        Total Fee: {formatCurrency(payment.totalAmount)}
+                      </div>
+                    </td>
+                    
                     <td className="p-5">
                       <span className="bg-gray-900 text-gray-300 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border border-gray-800">
                         {payment.method}
                       </span>
                     </td>
+                    
                     <td className="p-5 text-gray-400 text-sm">
                       {new Date(payment.createdAt).toLocaleDateString()}
                     </td>
-                    {/* FIXED: Added the Download Button */}
+                    
+                    {/* INVOICE DOWNLOAD BUTTON */}
                     <td className="p-5 text-right">
                       <button 
                         onClick={() => generateInvoice(payment)}
@@ -121,16 +145,12 @@ const Payments = () => {
         </div>
       </div>
 
-      {/* FIXED: Moved the Modal to the bottom of the component so it doesn't break your layout */}
+      {/* PAYMENT MODAL */}
       <RecordPaymentModal 
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSuccess={() => {
-          const fetchPayments = async () => {
-            const data = await getAllPayments();
-            setPayments(data);
-          };
-          fetchPayments();
+          fetchPayments(); // Automatically refresh list when payment is successful
         }}
       />
     </div>
