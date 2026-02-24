@@ -44,9 +44,11 @@ export const generateMonthlyReport = async (stats) => {
     doc.text(`Total Active Members: ${stats.activeMembers || 0}`, 18, 60);
     doc.text(`Total Trainers: ${stats.totalTrainers || 0}`, 18, 68);
     
+    // 🔥 FIX: Safely format the Revenue
+    const safeRevenue = Number(stats.currentMonthRevenue || 0);
     doc.setFontSize(12);
     doc.setTextColor(22, 101, 52); // Dark Green
-    doc.text(`Total Monthly Revenue: Rs. ${stats.currentMonthRevenue?.toLocaleString() || 0}`, 100, 64);
+    doc.text(`Total Monthly Revenue: Rs. ${safeRevenue.toLocaleString('en-IN')}`, 100, 64);
 
     // 5. Transaction Ledger (Table)
     doc.setFontSize(14);
@@ -58,13 +60,18 @@ export const generateMonthlyReport = async (stats) => {
       doc.setTextColor(100, 100, 100);
       doc.text('No transactions recorded for this month.', 14, 100);
     } else {
-      const tableData = monthlyPayments.map(p => [
-        p._id.slice(-6).toUpperCase(),
-        new Date(p.createdAt).toLocaleDateString(),
-        p.member?.name || 'Unknown',
-        p.method,
-        `Rs. ${p.amount}`
-      ]);
+      // 🔥 THE MAIN FIX: Safely extract the amount, no matter what it was saved as!
+      const tableData = monthlyPayments.map(p => {
+        const safeAmount = Number(p.paidAmount || p.totalAmount || p.amount || 0);
+        
+        return [
+          p._id.slice(-6).toUpperCase(),
+          new Date(p.createdAt).toLocaleDateString(),
+          p.member?.name || 'Unknown',
+          p.method || 'N/A',
+          `Rs. ${safeAmount.toLocaleString('en-IN')}` // Added proper Indian comma formatting
+        ];
+      });
 
       autoTable(doc, {
         startY: 95,
