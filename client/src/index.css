@@ -1,0 +1,8 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background-color: #000000; /* Pure black background globally */
+  color: #ffffff; /* Default text to white */
+}
