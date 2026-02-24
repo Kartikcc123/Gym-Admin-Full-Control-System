@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'http://localhost:5000/api', 
+  baseURL: 'https://gym-admin-full-control-system.onrender.com/api', 
 });
 
 // THE INTERCEPTOR: This automatically attaches your digital badge to every request
